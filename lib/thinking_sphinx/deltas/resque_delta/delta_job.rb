@@ -20,8 +20,8 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     master_index = index.sub("_delta","_core")
     full_index_indication = "/tmp/#{master_index}"
 
-    if File.exist?(full_index_indication)
-      File.delete(full_index_indication) 
+    if File.exist?(full_index_indication) || !File.exist?("#{config.indices_location}/#{master_index}.spl") 
+      File.delete(full_index_indication) if File.exist?(full_index_indication)
       config.controller.index master_index
     else
 
