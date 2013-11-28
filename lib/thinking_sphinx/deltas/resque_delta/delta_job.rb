@@ -29,7 +29,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
       if run_merge 
         model_table = index.gsub("_delta","").classify.constantize
-        max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).all[0].max_updated_at
+        max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
       end
 
       # Delta Index
@@ -38,7 +38,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       if run_merge
         output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} --merge #{master_index} #{index} --rotate`
         puts output
-        model_table.update_all("delta=0", ['delta=? AND updated_at<=?', 1, max_delta_update])
+        model_table.update_all("delta=0", ['delta=? AND updated_at<?', 1, max_delta_update])
       end
     end
     
