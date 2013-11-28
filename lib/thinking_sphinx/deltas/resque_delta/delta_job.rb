@@ -27,8 +27,9 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
       run_merge = Time.now - File.ctime("#{config.indices_location}/#{master_index}.spl") > 1.hour
 
-      if run_merge 
-        model_table = index.gsub("_delta","").classify.constantize
+      if run_merge
+        model_class = index.gsub("_delta","")
+        model_table = model_class == "contracts_contract" ? Contracts::Contract : model_class.classify.constantize
         max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
       end
 
