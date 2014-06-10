@@ -5,6 +5,7 @@ require 'resque-lock-timeout'
 class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   extend Resque::Plugins::LockTimeout
+  extend Resque::Plugins::Analytics
   @queue = :ts_delta
   @lock_timeout = 240
 
