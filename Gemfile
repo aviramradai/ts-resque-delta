@@ -3,6 +3,8 @@ source "http://rubygems.org"
 # Specify your gem's dependencies in ts-resque-delta.gemspec
 gemspec
 
+gem "resque-analytics", "~>0.6.1", require: 'resque-analytics/server'
+
 group :development do
   if RUBY_PLATFORM =~ /darwin/i
     gem 'rb-fsevent'
