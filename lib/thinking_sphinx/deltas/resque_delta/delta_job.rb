@@ -6,7 +6,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
-  @lock_timeout = 240
+  @lock_timeout = 3600
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
