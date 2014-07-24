@@ -6,7 +6,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
-  @lock_timeout = 3600
+  @lock_timeout = 240
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -14,33 +14,31 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   # @param [String] index the name of the Sphinx index
   #
   def self.perform(index)
-    return if skip?(index)
+    if skip?(index) || delta_is_running(index)
+      puts "Indexer is allready running for #{index} index. skipping this run"
+      return
+    end
     
     config = ThinkingSphinx::Configuration.instance
     master_index = index.sub("_delta","_core")
     full_index_indication = "/tmp/#{master_index}"
 
-    if File.exist?(full_index_indication) || !File.exist?("#{config.indices_location}/#{master_index}.spl") 
-      File.delete(full_index_indication) if File.exist?(full_index_indication)
-      config.controller.index master_index
-    else
+    run_full = File.exist?(full_index_indication) || !File.exist?("#{config.indices_location}/#{master_index}.spl") 
+      
+    if run_full
+      model_class = index.gsub("_delta","")
+      model_table = model_class == "contracts_contract" ? Contracts::Contract : model_class.classify.constantize
+      max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
+    end
 
-      run_merge = Time.now - File.ctime("#{config.indices_location}/#{master_index}.spl") > 1.hour
+    # Delta Index
+    config.controller.index index, :verbose => !config.settings['quiet_deltas']
 
-      if run_merge
-        model_class = index.gsub("_delta","")
-        model_table = model_class == "contracts_contract" ? Contracts::Contract : model_class.classify.constantize
-        max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
-      end
-
-      # Delta Index
-      config.controller.index index, :verbose => !config.settings['quiet_deltas']
-     
-      if run_merge
-        output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} --merge #{master_index} #{index} --rotate`
-        puts output
-        model_table.update_all("delta=0", ['delta=? AND updated_at<?', 1, max_delta_update])
-      end
+    if run_full
+      File.delete(full_index_indication) if File.exist?(full_index_indication)  
+      output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} #{master_index} --rotate`
+      puts output
+      model_table.update_all("delta=0", ['delta=? AND updated_at<?', 1, max_delta_update])
     end
     
     #@atlantis: far as I can tell, ThinkingSphinx handles this automatically https://groups.google.com/forum/?fromgroups=#!topic/thinking-sphinx/_fGTfqJXog0
@@ -64,6 +62,11 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     #     config.client.update(index, ['sphinx_deleted'], flag_hash)
     #   end
     # end
+  end
+
+  def self.delta_is_running(index)
+    output = `ps -ef | grep #{index} | grep rotate`
+    output.include? "#{index} --rotate" 
   end
 
   # Try again later if lock is in use.
