@@ -38,7 +38,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       File.delete(full_index_indication) if File.exist?(full_index_indication)  
       output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} #{master_index} --rotate`
       puts output
-      model_table.update_all("delta=0", ['delta=? AND updated_at<?', 1, max_delta_update])
+      model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
     end
     
     #@atlantis: far as I can tell, ThinkingSphinx handles this automatically https://groups.google.com/forum/?fromgroups=#!topic/thinking-sphinx/_fGTfqJXog0
