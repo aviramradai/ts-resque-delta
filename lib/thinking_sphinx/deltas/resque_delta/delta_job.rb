@@ -29,7 +29,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       model_class = index.gsub("_delta","")
       model_table = if model_class == "contracts_contract"
         Contracts::Contract
-      elsif model_class.start_with?("incident")
+      elsif model_class.start_with?("incident") # Multiple indices, looks like "incident_index_1"
         Incident
       else
         model_class.classify.constantize
