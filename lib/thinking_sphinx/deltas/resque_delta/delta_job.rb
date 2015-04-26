@@ -18,16 +18,23 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       puts "Indexer is allready running for #{index} index. skipping this run"
       return
     end
-    
+
     config = ThinkingSphinx::Configuration.instance
     master_index = index.sub("_delta","_core")
     full_index_indication = "/tmp/#{master_index}"
 
-    run_full = File.exist?(full_index_indication) || !File.exist?("#{config.indices_location}/#{master_index}.spl") 
-      
+    run_full = File.exist?(full_index_indication) || !File.exist?("#{config.indices_location}/#{master_index}.spl")
+
     if run_full
       model_class = index.gsub("_delta","")
-      model_table = model_class == "contracts_contract" ? Contracts::Contract : model_class.classify.constantize
+      model_table = if model_class == "contracts_contract"
+        Contracts::Contract
+      elsif model_class.start_with?("incident") # For supporting multiple indices, that look like "incident_index_1"
+        Incident
+      else
+        model_class.classify.constantize
+      end
+
       max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
     end
 
@@ -35,12 +42,12 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     config.controller.index index, :verbose => !config.settings['quiet_deltas']
 
     if run_full
-      File.delete(full_index_indication) if File.exist?(full_index_indication)  
+      File.delete(full_index_indication) if File.exist?(full_index_indication)
       output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} #{master_index} --rotate`
       puts output
       model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
     end
-    
+
     #@atlantis: far as I can tell, ThinkingSphinx handles this automatically https://groups.google.com/forum/?fromgroups=#!topic/thinking-sphinx/_fGTfqJXog0
 
     # Flag As Deleted
@@ -66,7 +73,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   def self.delta_is_running(index)
     output = `ps -ef | grep #{index} | grep rotate`
-    output.include? "#{index} --rotate" 
+    output.include? "#{index} --rotate"
   end
 
   # Try again later if lock is in use.
