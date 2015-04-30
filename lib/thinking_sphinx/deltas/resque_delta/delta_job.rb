@@ -7,14 +7,10 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
   @lock_timeout = 240
-  @redis = Redis.new(host: (server_address if Rails.env.production?))
+  # @redis = Redis.new(host: (server_address if Rails.env.production?))
+  @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
 
-  REDIS_SET_NAME= "incident_deltas"
-  INCIDENT_INDICES = ["incident_index_1_delta",
-                      "incident_index_2_delta",
-                      "incident_index_3_delta",
-                      "incident_index_4_delta",
-                      "incident_index_5_delta"]
+  REDIS_SET_NAME = "incident_deltas"
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -141,22 +137,25 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     resque_config[Rails.env]['redis_server']
   end
 
-  def self.update_incident_deltas(index, max_delta_update)
+  def self.update_incident_deltas(index, update_time)
     byebug
     puts "**** redis 1: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
-    # @redis.set(index, max_delta_update)
-    @redis.zadd(REDIS_SET_NAME, max_delta_update, index) # TODO: only if not existing already
 
-    keys = @redis.zrange(REDIS_SET_NAME, 0, -1)
-    puts "**** redis 2: #{keys}"
+    # TODO: only if not existing already
+    @redis.multi do
+      @redis.set(index, update_time)
+      @redis.zadd(REDIS_SET_NAME, update_time.to_f, index)
+    end
 
-    if @redis.zcard(REDIS_SET_NAME) == 5
-      # set delta = 0 from most recent max_delta_update
-      # model_table.where(['delta=? AND updated_at<?', 1, keys[0].max_delta_update]).update_all("delta=0")
+    values = @redis.zrange(REDIS_SET_NAME, 0, -1)
+    puts "**** redis 2: #{values}"
 
-      @redis.zrem(REDIS_SET_NAME, *keys)
+    unless values.size < 5
+      # model_table.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])).update_all("delta=0")
 
       puts "**** redis 3: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
+      # @redis.zrem(REDIS_SET_NAME, values)
+      @redis.flushall
     end
   end
 
