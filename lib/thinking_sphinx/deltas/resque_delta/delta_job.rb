@@ -7,6 +7,14 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
   @lock_timeout = 240
+  @redis = Redis.new(host: (server_address if Rails.env.production?))
+
+  REDIS_SET_NAME= "incident_deltas"
+  INCIDENT_INDICES = ["incident_index_1_delta",
+                      "incident_index_2_delta",
+                      "incident_index_3_delta",
+                      "incident_index_4_delta",
+                      "incident_index_5_delta"]
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -45,7 +53,12 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       File.delete(full_index_indication) if File.exist?(full_index_indication)
       output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} #{master_index} --rotate`
       puts output
-      model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
+
+      if model_table == Incident
+        update_incident_deltas(index, max_delta_update)
+      else
+        model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
+      end
     end
 
     #@atlantis: far as I can tell, ThinkingSphinx handles this automatically https://groups.google.com/forum/?fromgroups=#!topic/thinking-sphinx/_fGTfqJXog0
@@ -121,6 +134,30 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   def self.skip?(index)
     ThinkingSphinx::Deltas::ResqueDelta.locked?(index)
+  end
+
+  def self.server_address
+    resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
+    resque_config[Rails.env]['redis_server']
+  end
+
+  def self.update_incident_deltas(index, max_delta_update)
+    byebug
+    puts "**** redis 1: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
+    # @redis.set(index, max_delta_update)
+    @redis.zadd(REDIS_SET_NAME, max_delta_update, index) # TODO: only if not existing already
+
+    keys = @redis.zrange(REDIS_SET_NAME, 0, -1)
+    puts "**** redis 2: #{keys}"
+
+    if @redis.zcard(REDIS_SET_NAME) == 5
+      # set delta = 0 from most recent max_delta_update
+      # model_table.where(['delta=? AND updated_at<?', 1, keys[0].max_delta_update]).update_all("delta=0")
+
+      @redis.zrem(REDIS_SET_NAME, *keys)
+
+      puts "**** redis 3: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
+    end
   end
 
   # def self.filter_flag_as_deleted_ids(ids, index)
