@@ -7,10 +7,10 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
   @lock_timeout = 240
-  # @redis = Redis.new(host: (server_address if Rails.env.production?))
   @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
 
   REDIS_SET_NAME = "incident_deltas"
+  NUMBER_OF_INCIDENT_DELTAS = 5
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -138,7 +138,6 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.update_incident_deltas(index, update_time)
-    byebug
     puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
 
     # TODO: only if not existing already
@@ -150,7 +149,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
     values = @redis.zrange(REDIS_SET_NAME, 0, -1)
 
-    unless values.size < 5
+    unless values.size < NUMBER_OF_INCIDENT_DELTAS
       puts "all incident deltas ran - clearing all workers and setting delta = 0"
       Incident.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])]).update_all("delta=0")
       @redis.flushall
