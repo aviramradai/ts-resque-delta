@@ -152,7 +152,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
     unless values.size < 5
       puts "all incident deltas ran - clearing all workers and setting delta = 0"
-      model_table.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])]).update_all("delta=0")
+      Incident.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])]).update_all("delta=0")
       @redis.flushall
     end
   end
