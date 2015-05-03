@@ -140,12 +140,12 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   def self.update_incident_deltas(index, update_time)
     puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
 
-    # TODO: only if not existing already
+    # TODO: lock
     @redis.multi do
       @redis.set(index, update_time)
       @redis.zadd(REDIS_SET_NAME, update_time.to_f, index)
       puts "added completed worker: #{index}"
-    end
+    end unless @redis.exists(index)
 
     values = @redis.zrange(REDIS_SET_NAME, 0, -1)
 
