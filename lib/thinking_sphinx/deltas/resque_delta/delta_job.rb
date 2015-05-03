@@ -139,22 +139,20 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   def self.update_incident_deltas(index, update_time)
     byebug
-    puts "**** redis 1: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
+    puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
 
     # TODO: only if not existing already
     @redis.multi do
       @redis.set(index, update_time)
       @redis.zadd(REDIS_SET_NAME, update_time.to_f, index)
+      puts "added completed worker: #{index}"
     end
 
     values = @redis.zrange(REDIS_SET_NAME, 0, -1)
-    puts "**** redis 2: #{values}"
 
     unless values.size < 5
-      # model_table.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])).update_all("delta=0")
-
-      puts "**** redis 3: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
-      # @redis.zrem(REDIS_SET_NAME, values)
+      puts "all incident deltas ran - clearing all workers and setting delta = 0"
+      model_table.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])).update_all("delta=0")
       @redis.flushall
     end
   end
