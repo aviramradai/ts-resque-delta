@@ -7,7 +7,6 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
   @lock_timeout = 240
-  # @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
 
   REDIS_SET_NAME = "incident_deltas"
   NUMBER_OF_INCIDENT_DELTAS = 5
@@ -133,17 +132,16 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.redis
-    @redis ||= Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: server_address))
+    @redis ||= Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
   end
 
   def self.server_address
-    puts "** Rails root: #{Rails.root.to_s}"
     resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
     resque_config[Rails.env]['redis_server']
   end
 
   def self.update_incident_deltas(index, update_time)
-    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 600)
+    mutex = Redis::Semaphore.new(:incident_deltas_mutex, redis: redis, stale_client_timeout: 600)
     mutex.lock do
       puts "workers completed: #{redis.keys('incident_index*')}"
 
