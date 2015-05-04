@@ -7,7 +7,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   extend Resque::Plugins::LockTimeout
   @queue = :ts_delta
   @lock_timeout = 240
-  @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
+  @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (ThinkingSphinx::Deltas::ResqueDelta::DeltaJob.server_address if Rails.env.production?)))
 
   REDIS_SET_NAME = "incident_deltas"
   NUMBER_OF_INCIDENT_DELTAS = 5
