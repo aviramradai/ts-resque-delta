@@ -137,7 +137,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.server_address
-    byebug
+    puts "** Rails root: #{Rails.root.to_s}"
     resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
     resque_config[Rails.env]['redis_server']
   end
