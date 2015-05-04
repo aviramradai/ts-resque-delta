@@ -138,7 +138,8 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.update_incident_deltas(index, update_time)
-    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 30)
+    puts "*** update_incident_deltas[#{index}, #{update_time}]"
+    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 20)
     mutex.lock do
       puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
 
@@ -156,6 +157,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
         @redis.flushall
       end
     end
+    puts "*** update_incident_deltas finished[#{index}, #{update_time}]"
   end
 
   # def self.filter_flag_as_deleted_ids(ids, index)
