@@ -138,7 +138,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.update_incident_deltas(index, update_time)
-    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 20)
+    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 600)
     mutex.lock do
       puts "workers completed: #{@redis.keys('incident_index*')}"
 
