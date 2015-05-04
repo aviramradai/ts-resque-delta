@@ -8,16 +8,9 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   @queue = :ts_delta
   @lock_timeout = 240
   # @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
-  @redis = Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: server_address))
 
   REDIS_SET_NAME = "incident_deltas"
   NUMBER_OF_INCIDENT_DELTAS = 5
-
-  def self.server_address
-    byebug
-    resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
-    resque_config[Rails.env]['redis_server']
-  end
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -139,27 +132,37 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     ThinkingSphinx::Deltas::ResqueDelta.locked?(index)
   end
 
+  def self.redis
+    @redis ||= Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: server_address))
+  end
+
+  def self.server_address
+    byebug
+    resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
+    resque_config[Rails.env]['redis_server']
+  end
+
   def self.update_incident_deltas(index, update_time)
     mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 600)
     mutex.lock do
-      puts "workers completed: #{@redis.keys('incident_index*')}"
+      puts "workers completed: #{redis.keys('incident_index*')}"
 
-      unless @redis.exists(index)
-        @redis.setex(index, 21600, update_time) # delete after 6 hours
+      unless redis.exists(index)
+        redis.setex(index, 21600, update_time) # delete after 6 hours
         puts "added completed worker: #{index}"
       end
 
-      unless (keys = @redis.keys("incident_index*")).size < NUMBER_OF_INCIDENT_DELTAS
+      unless (keys = redis.keys("incident_index*")).size < NUMBER_OF_INCIDENT_DELTAS
         puts "> all incident deltas ran - clearing all workers and setting delta = 0"
         Incident.where(['delta=? AND updated_at<?', 1, minimum_updated_timestamp(keys)]).update_all("delta=0")
-        @redis.flushall
+        redis.flushall
       end
     end
   end
 
   def self.minimum_updated_timestamp(keys)
     keys.inject do |min, x|
-      ts = @redis.get(x)
+      ts = redis.get(x)
       min = ts if min > ts
       min
     end
