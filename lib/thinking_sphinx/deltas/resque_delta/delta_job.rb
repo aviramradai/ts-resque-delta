@@ -155,7 +155,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
     end
   end
 
-  def minimum_updated_timestamp(keys)
+  def self.minimum_updated_timestamp(keys)
     keys.inject do |min, x|
       ts = @redis.get(x)
       min = ts if min > ts
