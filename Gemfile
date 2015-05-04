@@ -20,6 +20,8 @@ group :development do
   end
 end
 
+gem "redis-semaphore"
+
 # Provided as an example for developers to use
 # group :test do
 #   if RUBY_VERSION >= '1.9'

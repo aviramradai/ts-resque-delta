@@ -138,21 +138,23 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   end
 
   def self.update_incident_deltas(index, update_time)
-    puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
+    mutex = Redis::Semaphore.new(:incident_deltas_mutex, stale_client_timeout: 30)
+    mutex.lock do
+      puts "workers completed: #{@redis.zrange(REDIS_SET_NAME, 0, -1)}"
 
-    # TODO: lock
-    @redis.multi do
-      @redis.set(index, update_time)
-      @redis.zadd(REDIS_SET_NAME, update_time.to_f, index)
-      puts "added completed worker: #{index}"
-    end unless @redis.exists(index)
+      @redis.multi do
+        @redis.set(index, update_time)
+        @redis.zadd(REDIS_SET_NAME, update_time.to_f, index)
+        puts "added completed worker: #{index}"
+      end unless @redis.exists(index)
 
-    values = @redis.zrange(REDIS_SET_NAME, 0, -1)
+      values = @redis.zrange(REDIS_SET_NAME, 0, -1)
 
-    unless values.size < NUMBER_OF_INCIDENT_DELTAS
-      puts "all incident deltas ran - clearing all workers and setting delta = 0"
-      Incident.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])]).update_all("delta=0")
-      @redis.flushall
+      unless values.size < NUMBER_OF_INCIDENT_DELTAS
+        puts "all incident deltas ran - clearing all workers and setting delta = 0"
+        Incident.where(['delta=? AND updated_at<?', 1, @redis.get(values[0])]).update_all("delta=0")
+        @redis.flushall
+      end
     end
   end
 
