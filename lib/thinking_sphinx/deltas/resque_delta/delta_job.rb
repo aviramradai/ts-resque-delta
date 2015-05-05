@@ -143,17 +143,17 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   def self.update_incident_deltas(index, update_time)
     mutex = Redis::Semaphore.new(:incident_deltas_mutex, redis: redis, stale_client_timeout: 600)
     mutex.lock do
-      puts "workers completed: #{redis.keys('incident_index*')}"
+      puts "*> workers completed: #{redis.keys('incident_index*')}"
 
       unless redis.exists(index)
         redis.setex(index, 21600, update_time) # delete after 6 hours
-        puts "added completed worker: #{index}"
+        puts "*> added completed worker: #{index}"
       end
 
       unless (keys = redis.keys("incident_index*")).size < NUMBER_OF_INCIDENT_DELTAS
-        puts "> all incident deltas ran - clearing all workers and setting delta = 0"
+        puts "*> all incident deltas ran - clearing all workers and setting delta = 0"
         Incident.where(['delta=? AND updated_at<?', 1, minimum_updated_timestamp(keys)]).update_all("delta=0")
-        redis.flushall
+        redis.del(keys)
       end
     end
   end
