@@ -37,9 +37,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       else
         model_class.classify.constantize
       end
-      Replica.use do
-        max_delta_update = model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at
-      end
+      max_delta_update = Replica.use { model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at }
     end
 
     # Delta Index
