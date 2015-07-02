@@ -9,7 +9,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   @lock_timeout = 240
 
   REDIS_SET_NAME = "incident_deltas"
-  NUMBER_OF_INCIDENT_DELTAS = 5
+  NUMBER_OF_INCIDENT_DELTAS = 6
 
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
@@ -143,14 +143,15 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   def self.update_incident_deltas(index, update_time)
     mutex = Redis::Semaphore.new(:incident_deltas_mutex, redis: redis, stale_client_timeout: 600)
     mutex.lock do
-      puts "*> workers completed: #{redis.keys('incident_index*')}"
+      puts "*> workers completed: #{redis.keys('incident_*')}"
 
+      byebug
       unless redis.exists(index)
         redis.setex(index, 21600, update_time) # delete after 6 hours
         puts "*> added completed worker: #{index}"
       end
 
-      unless (keys = redis.keys("incident_index*")).size < NUMBER_OF_INCIDENT_DELTAS
+      unless (keys = redis.keys("incident_*")).size < NUMBER_OF_INCIDENT_DELTAS
         puts "*> all incident deltas ran - clearing all workers and setting delta = 0"
         Incident.where(['delta=? AND updated_at<?', 1, minimum_updated_timestamp(keys)]).update_all("delta=0")
         redis.del(keys)
