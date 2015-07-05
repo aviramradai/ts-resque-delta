@@ -8,9 +8,6 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
   @queue = :ts_delta
   @lock_timeout = 240
 
-  REDIS_SET_NAME = "incident_deltas"
-  NUMBER_OF_INCIDENT_DELTAS = 6
-
   # Runs Sphinx's indexer tool to process the index. Currently assumes Sphinx
   # is running.
   #
@@ -30,13 +27,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
     if run_full
       model_class = index.gsub("_delta","")
-      model_table = if model_class == "contracts_contract"
-        Contracts::Contract
-      elsif model_class.start_with?("incident") # For supporting multiple indices, that look like "incident_index_1"
-        Incident
-      else
-        model_class.classify.constantize
-      end
+      model_table = model_class == "contracts_contract" ? Contracts::Contract : model_class.classify.constantize
       max_delta_update = Replica.use { model_table.select("max(updated_at) as max_updated_at").where(["delta=?",1]).first.max_updated_at }
     end
 
@@ -47,12 +38,7 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
       File.delete(full_index_indication) if File.exist?(full_index_indication)
       output = `#{config.controller.bin_path}#{config.controller.indexer_binary_name} --config #{config.configuration_file} #{master_index} --rotate`
       puts output
-
-      if model_table == Incident
-        update_incident_deltas(index, max_delta_update)
-      else
-        model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
-      end
+      model_table.where(['delta=? AND updated_at<?', 1, max_delta_update]).update_all("delta=0")
     end
 
     #@atlantis: far as I can tell, ThinkingSphinx handles this automatically https://groups.google.com/forum/?fromgroups=#!topic/thinking-sphinx/_fGTfqJXog0
@@ -128,41 +114,6 @@ class ThinkingSphinx::Deltas::ResqueDelta::DeltaJob
 
   def self.skip?(index)
     ThinkingSphinx::Deltas::ResqueDelta.locked?(index)
-  end
-
-  def self.redis
-    @redis ||= Redis::Namespace.new(:incident_deltas, redis: Redis.new(host: (server_address if Rails.env.production?)))
-  end
-
-  def self.server_address
-    resque_config = YAML.load_file("#{Rails.root.to_s}/config/resque.yml")
-    resque_config[Rails.env]['redis_server']
-  end
-
-  def self.update_incident_deltas(index, update_time)
-    mutex = Redis::Semaphore.new(:incident_deltas_mutex, redis: redis, stale_client_timeout: 600)
-    mutex.lock do
-      puts "*> workers completed: #{redis.keys('incident_index*') + redis.keys('incident_delta')}"
-
-      unless redis.exists(index)
-        redis.setex(index, 21600, update_time) # delete after 6 hours
-        puts "*> added completed worker: #{index}"
-      end
-
-      unless (keys = redis.keys("incident_index*") + redis.keys('incident_delta')).size < NUMBER_OF_INCIDENT_DELTAS
-        puts "*> all incident deltas ran - clearing all workers and setting delta = 0"
-        Incident.where(['delta=? AND updated_at<?', 1, minimum_updated_timestamp(keys)]).update_all("delta=0")
-        redis.del(keys)
-      end
-    end
-  end
-
-  def self.minimum_updated_timestamp(keys)
-    keys.inject do |min, x|
-      ts = redis.get(x)
-      min = ts if min > ts
-      min
-    end
   end
 
   # def self.filter_flag_as_deleted_ids(ids, index)
